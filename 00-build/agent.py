@@ -32,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -65,6 +66,10 @@ MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
+MAX_TOOL_FAILURES = 3  # loop spec §3: stuck after 3 consecutive failed tool calls
+
+# An output that ends in "ESCALATE: <why>" is a deliberate hand-off to a human.
+ESCALATE_RE = re.compile(r"^\W*ESCALATE\s*:\s*(.*)$", re.I | re.M)
 
 SERVER = "cortex"
 
@@ -159,12 +164,36 @@ async def run(which: str = "happy") -> None:
     last_draft = ""
     prompt = f"PM task brief:\n\n{task['body']}"
 
+    # Loop spec §2-3: the done test and the stuck counters live in code, outside the model.
+    needs_stories = "stories" in task["body"].lower()
+    stories_queued, queue_rejected, consecutive_failures = 0, False, 0
+    evidence: dict = {"task": which, "tool_calls": [], "critic_verdicts": []}
+
+    def finish(exit_name: str, *, accepted: bool, reason: str) -> None:
+        """Every exit goes through here: show + save the draft, then save the evidence."""
+        emit_deliverable(which, last_draft, accepted=accepted, reason=reason, cost=cost)
+        verdicts = evidence["critic_verdicts"]
+        evidence.update(
+            exit=exit_name, accepted=accepted, reason=reason, cost_usd=round(cost, 4),
+            iterations=turns_used, revisions=revisions, stories_queued=stories_queued,
+            done_test={
+                "draft_exists": bool(last_draft.strip()),
+                "critic_passed": bool(verdicts) and verdicts[-1].get("verdict") == "pass",
+                "stories_queued": (stories_queued >= 1) if needs_stories else "n/a",
+                "nothing_posted": True,  # there is no publish tool
+            })
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        path = OUTPUT_DIR / f"evidence-{which}.json"
+        path.write_text(json.dumps(evidence, indent=2, default=str), encoding="utf-8")
+        print(f"Saved evidence log -> {path.relative_to(Path(__file__).parent)}  "
+              f"(exit: {exit_name})")
+
     while True:
         # Bounds are checked BEFORE every model call, outside the model.
         if cost >= COST_CAP_USD:
             reason = f"cost cap ${COST_CAP_USD} hit at ${cost:.4f}"
             banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
-            emit_deliverable(which, last_draft, accepted=False, reason=reason, cost=cost)
+            finish("stuck", accepted=False, reason=reason)
             return
         if turns_used >= MAX_ITERATIONS:
             break
@@ -200,27 +229,47 @@ async def run(which: str = "happy") -> None:
                         source_log.append(f"{name}({args}) -> {text}")
                         print(f"\n[turn {turns_used + 1}] TOOL {name}({args})")
                         print(f"          -> {text[:300]}")
+
+                        # Track the done test + the stuck counter from real tool results.
+                        try:
+                            parsed = json.loads(text)
+                        except ValueError:
+                            parsed = {}
+                        ok = not getattr(block, "is_error", False)
+                        if isinstance(parsed, dict):
+                            ok = ok and "error" not in parsed
+                            if name == "propose_stories":
+                                if parsed.get("status") == "queued_for_approval":
+                                    stories_queued += int(parsed.get("count", 0))
+                                elif parsed.get("error") == "batch_exceeds_queue_cap":
+                                    queue_rejected = True
+                        consecutive_failures = 0 if ok else consecutive_failures + 1
+                        evidence["tool_calls"].append({"tool": name, "args": args, "ok": ok})
             elif isinstance(msg, ResultMessage):
                 result = msg
 
         if result is None:
-            emit_deliverable(which, last_draft, accepted=False,
-                             reason="SDK returned no result", cost=cost)
+            finish("stuck", accepted=False, reason="SDK returned no result")
             return
         session_id = result.session_id
         turns_used += result.num_turns or 0
         cost += result.total_cost_usd or 0.0
 
+        if consecutive_failures >= MAX_TOOL_FAILURES:
+            reason = f"{consecutive_failures} consecutive tool failures"
+            banner(f"STUCK, {reason}. Halting and escalating to a human.")
+            finish("stuck", accepted=False, reason=reason)
+            return
         if result.subtype == "error_max_budget_usd":
             reason = f"cost cap ${COST_CAP_USD} hit at ${cost:.4f}"
             banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
-            emit_deliverable(which, last_draft, accepted=False, reason=reason, cost=cost)
+            finish("stuck", accepted=False, reason=reason)
             return
         if result.subtype == "error_max_turns":
             break
         if result.is_error:
-            emit_deliverable(which, last_draft, accepted=False,
-                             reason=f"SDK error: {result.subtype} {result.errors}", cost=cost)
+            finish("stuck", accepted=False,
+                   reason=f"SDK error: {result.subtype} {result.errors}")
             return
 
         # No pending tool calls => Cortex produced a proposed output. Validate it.
@@ -230,21 +279,51 @@ async def run(which: str = "happy") -> None:
         banner("CRITIC, independent validation")
         verdict = await review(MODEL, last_draft, "\n".join(source_log))
         cost += verdict["_cost"]
-        print(json.dumps({k: v for k, v in verdict.items() if k != "_cost"}, indent=2))
+        shown = {k: v for k, v in verdict.items() if k != "_cost"}
+        evidence["critic_verdicts"].append(shown)
+        print(json.dumps(shown, indent=2))
 
         if verdict["verdict"] == "pass":
+            # Escalate exit (spec §3): Cortex handed it to a human on purpose.
+            esc = ESCALATE_RE.search(last_draft)
+            if esc:
+                reason = f"Cortex escalated: {esc.group(1).strip()}"
+                banner(f"ESCALATE, a human takes it from here. Run cost ≈ ${cost:.4f}")
+                finish("escalate", accepted=False, reason=reason)
+                return
+
+            # Done test (spec §2): stories were asked for, so at least 1 must be queued.
+            if needs_stories and stories_queued < 1:
+                if queue_rejected:
+                    reason = "story batch exceeded the queue cap; escalating, not splitting it"
+                    banner(f"ESCALATE, {reason}. Run cost ≈ ${cost:.4f}")
+                    finish("escalate", accepted=False, reason=reason)
+                    return
+                if revisions >= MAX_REVISIONS:
+                    reason = f"done test failed {MAX_REVISIONS}x: no stories queued"
+                    banner(f"REVISION CAP hit ({MAX_REVISIONS}). Escalating, not looping. "
+                           f"Run cost ≈ ${cost:.4f}")
+                    finish("stuck", accepted=False, reason=reason)
+                    return
+                revisions += 1
+                print(f"\n-> done test failed (no stories queued); revision "
+                      f"{revisions}/{MAX_REVISIONS}")
+                prompt = ("Done test failed: the task asks for proposed stories but none are "
+                          "queued. Call propose_stories with the stories (within the cap), "
+                          "or end with ESCALATE: <why>. Listing them in prose does not count.")
+                continue
+
             banner(f"HITL CHECKPOINT, status update + any proposed stories queued for "
                    f"your review. Nothing posted, no commitments made. "
                    f"Run cost ≈ ${cost:.4f}")
-            emit_deliverable(which, last_draft, accepted=True,
-                             reason="validator passed", cost=cost)
+            finish("success", accepted=True, reason="validator passed and done test met")
             return
 
         if revisions >= MAX_REVISIONS:
             reason = f"validator rejected {MAX_REVISIONS}x (revision cap)"
             banner(f"REVISION CAP hit ({MAX_REVISIONS}). Escalating to a human "
                    f"instead of looping. Run cost ≈ ${cost:.4f}")
-            emit_deliverable(which, last_draft, accepted=False, reason=reason, cost=cost)
+            finish("stuck", accepted=False, reason=reason)
             return
 
         revisions += 1
@@ -254,8 +333,7 @@ async def run(which: str = "happy") -> None:
 
     banner(f"MAX ITERATIONS ({MAX_ITERATIONS}) reached without finishing. "
            f"Escalating. Run cost ≈ ${cost:.4f}")
-    emit_deliverable(which, last_draft, accepted=False,
-                     reason=f"max iterations ({MAX_ITERATIONS}) reached", cost=cost)
+    finish("stuck", accepted=False, reason=f"max iterations ({MAX_ITERATIONS}) reached")
 
 
 if __name__ == "__main__":
