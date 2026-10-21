@@ -34,6 +34,10 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 
 *Caption: Cortex's drafted Northstar (P-NORTH) status update from `python agent.py`. The status is left as `[PENDING HUMAN DECISION]`, the data is flagged as stale (last activity 2026-06-30), and 3 stories are queued for approval. The run ended at the human checkpoint: the critic passed all 8 checks, the exit was `success`, and nothing was posted.*
 
+![Happy-path terminal run, abridged](screenshots/m2-happy-run-terminal-abridged.png)
+
+*Caption: The happy-path run from `python agent.py` as shown in the terminal, with the tool-result lines, the critic's per-check wording and the repeated final draft shortened to fit. It shows the 5 tool calls, 3 stories queued for approval, the critic's pass, and the `SUCCESS + HITL CHECKPOINT` banner (cost about $0.07, exit `success`). The complete, unabridged output is saved in [screenshots/m2-happy-run-full-log.txt](screenshots/m2-happy-run-full-log.txt).*
+
 ![Review of the M2 run outputs](screenshots/m2-run-review.png)
 
 *Caption: A review of the M2 run outputs (`run-output/` files and the full happy-path trace). It spots two flaws in the saved draft: the data age is stated as 116 days when it is 114, and the critic let that through. Noted for M3, where the critic gets tightened.*
