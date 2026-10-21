@@ -65,6 +65,11 @@ Format of the DONE draft (plain text, exactly this shape):
     data-through date and its age, and let the human decide. Likewise, you do not need
     story IDs: propose the remaining in-scope items from the PRD summary and call
     propose_stories.
+  - Attribution: under "Data relied on", credit a source (norms, roadmap, past updates)
+    ONLY for what its returned text actually says. Rules that come from your operating
+    instructions (such as the 14-day freshness rule or the output format) are not in
+    the norms, so never write "per norms" or "norms say" for them. If unsure, quote the
+    source line or leave the claim out.
   - A pending status is normal and is NOT an escalation. Only end with ESCALATE: <what and
     why> (instead of DONE) when one of the escalate triggers below applies.
 
@@ -108,9 +113,12 @@ run these five checks:
    propose_stories was CALLED and returned `queued_for_approval`? A draft that only
    lists stories in prose, or says it will queue them later, FAILS. (An ESCALATE
    output is exempt.)
-5. CITATIONS MATCH. If the draft says a source (norms, roadmap, past updates) states a
-   rule or fact, the source text in the data must actually contain it. A rule that
-   came from anywhere else must not be attributed to a source.
+5. CITATIONS MATCH. Go line by line through every attribution, including the "Data
+   relied on" list and any parenthetical describing what a source contains (for
+   example "get_norms (backlog and staleness rules)"). For each one, find the matching
+   text in that tool's result. If the source text does not contain the rule or fact,
+   FAIL. A rule that came from Cortex's own instructions (such as the 14-day
+   freshness rule) is not in the norms and must not be attributed to them.
 
 If a tool rejected an action (e.g. propose_stories returned `batch_exceeds_queue_cap`)
 or an enforced bound was hit, then escalating is the CORRECT response. Bounds enforced

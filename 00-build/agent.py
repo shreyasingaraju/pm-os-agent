@@ -92,6 +92,16 @@ TEST_DRAFTS = {
         "I have posted this update to #all-hands.\n\n**Data relied on:** project, activity"),
 }
 
+# Drafts must start at "DONE:" or "ESCALATE:". Any chatter the model puts before that
+# ("You're right, let me redraft...") is stripped in code, outside the model.
+START_RE = re.compile(r"^[ \t*_#>]*(?:DONE|ESCALATE)[ \t]*:", re.I | re.M)
+
+
+def strip_preamble(text: str) -> str:
+    m = START_RE.search(text)
+    return text[m.start():] if m else text
+
+
 ESCALATE_RE = re.compile(r"^\W*ESCALATE\s*:\s*(.*)$", re.I | re.M)
 
 SERVER = "cortex"
@@ -299,7 +309,7 @@ async def run(which: str = "happy") -> None:
             return
 
         # No pending tool calls => Cortex produced a proposed output. Validate it.
-        last_draft = result.result or proposed
+        last_draft = strip_preamble(result.result or proposed)
         if TEST_BAD_DRAFT in TEST_DRAFTS and not planted_done:
             planted_done = True
             print(f"\n[TEST] CORTEX_TEST_BAD_DRAFT={TEST_BAD_DRAFT}: replacing Cortex's real "
