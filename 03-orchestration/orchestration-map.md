@@ -67,4 +67,10 @@ Everything runs in-process inside `agent.py`. No MCP or A2A is used.
 
 ## 7. Cost & latency budget
 
-_Coordination has a price. Rough token/latency cost of the fleet vs a single agent. (Forward-link to M5 bounds.)_
+**Extra calls:** the validator adds 1 critic call per draft (1 to 4 per run).
+
+**Cost:** a clean run is about $0.05 to $0.11, a run with one revision about $0.14, and the worst case at the cap (3 revisions) about $0.25 to $0.40 (estimated), all under the $0.50 per-run cap.
+
+**Latency:** the critic adds about 5 to 15 seconds per draft, so a worst-case run reaches the PM a few minutes later than a single-agent run (estimated, not yet measured).
+
+**Bound for M5:** the revision cap (3), the iteration cap (14) and the $0.50 cost cap already limit this. M5 should measure the critic's real cost and latency.
