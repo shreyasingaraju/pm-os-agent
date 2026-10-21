@@ -39,5 +39,7 @@ async def review(model: str, proposed_output: str, source_data: str) -> dict:
             raise ValueError("bad verdict")
     except (json.JSONDecodeError, ValueError, AttributeError):
         verdict = {"verdict": "fail", "reasons": ["critic returned unparseable output"]}
+    if verdict["verdict"] == "fail" and verdict.get("tier") not in ("fixable", "safety"):
+        verdict["tier"] = "fixable"
     verdict["_cost"] = cost
     return verdict
