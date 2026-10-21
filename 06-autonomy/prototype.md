@@ -34,6 +34,10 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 
 *Caption: Cortex's drafted Northstar (P-NORTH) status update from `python agent.py`. The status is left as `[PENDING HUMAN DECISION]`, the data is flagged as stale (last activity 2026-06-30), and 3 stories are queued for approval. The run ended at the human checkpoint: the critic passed all 8 checks, the exit was `success`, and nothing was posted.*
 
+![Review of the M2 run outputs](screenshots/m2-run-review.png)
+
+*Caption: A review of the M2 run outputs (`run-output/` files and the full happy-path trace). It spots two flaws in the saved draft: the data age is stated as 116 days when it is 114, and the critic let that through. Noted for M3, where the critic gets tightened.*
+
 ## How to run it
 
 _Minimal steps for someone to reproduce the demo (env vars, and the command or the coding-agent prompt you used)._
