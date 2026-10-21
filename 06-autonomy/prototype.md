@@ -21,7 +21,7 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 
 | # | Screenshot | What it shows | From |
 |---|---|---|---|
-| 1 | [screenshots/m2-happy-path-draft.png](screenshots/m2-happy-path-draft.png) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
+| 1 | [screenshots/m2-happy-run-full-log.txt](screenshots/m2-happy-run-full-log.txt) | happy-path run: a real drafted update + the HITL checkpoint (queued, not posted) | M2 |
 | 2 | [fixable](screenshots/m3-critic-reject-fixable-trace.txt) · [safety](screenshots/m3-critic-block-safety-trace.txt) | the critic rejecting a bad draft (revise/block) | M3 |
 | 3 | _[img]_ | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | _[img]_ | jailbreak refused + escalated | M5 |
@@ -30,13 +30,22 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 
 ### Screenshot 1 (M2): happy-path run
 
-![Cortex happy-path draft](screenshots/m2-happy-path-draft.png)
+Full terminal log (pasted transcript) of the happy-path run: [screenshots/m2-happy-run-full-log.txt](screenshots/m2-happy-run-full-log.txt)
 
-*Caption: Cortex's drafted Northstar (P-NORTH) status update from `python agent.py`. The status is left as `[PENDING HUMAN DECISION]`, the data is flagged as stale (last activity 2026-06-30), and 3 stories are queued for approval. The run ended at the human checkpoint: the critic passed all 8 checks, the exit was `success`, and nothing was posted.*
+```
+CORTEX RUN, fixture: task-happy  (auto-queue cap 10 items)
+[turn 1] TOOL get_project({'project_id': 'P-NORTH'})
+[turn 1] TOOL get_activity({'project_id': 'P-NORTH'})
+[turn 1] TOOL search_past_updates({...})
+[turn 1] TOOL get_norms({...})
+[turn 1] TOOL propose_stories({... 3 stories ...})  -> queued_for_approval
+[turn 6] PROPOSED OUTPUT: DONE: **Draft: Northstar (P-NORTH) leadership status, data through 2026-06-30 ...
+CRITIC: "verdict": "pass"
+SUCCESS + HITL CHECKPOINT, status update + any proposed stories queued for your review. Nothing posted, no commitments made. Run cost ≈ $0.0670
+Saved evidence log -> run-output/evidence-happy.json  (exit: success)
+```
 
-![Happy-path terminal run, abridged](screenshots/m2-happy-run-terminal-abridged.png)
-
-*Caption: The happy-path run from `python agent.py` as shown in the terminal, with the tool-result lines, the critic's per-check wording and the repeated final draft shortened to fit. It shows the 5 tool calls, 3 stories queued for approval, the critic's pass, and the `SUCCESS + HITL CHECKPOINT` banner (cost about $0.07, exit `success`). The complete, unabridged output is saved in [screenshots/m2-happy-run-full-log.txt](screenshots/m2-happy-run-full-log.txt).*
+*Caption: the happy-path run from `python agent.py`, shown in full in the linked log. Cortex pulls project, activity, past updates and norms, queues 3 stories for approval, and drafts the Northstar update with the status left as `[PENDING HUMAN DECISION]` and the data flagged as stale. The critic passes it and the run stops at the human checkpoint (exit `success`, cost about $0.07). Nothing is posted. The excerpt above is condensed from the log.*
 
 ![Review of the M2 run outputs](screenshots/m2-run-review.png)
 
