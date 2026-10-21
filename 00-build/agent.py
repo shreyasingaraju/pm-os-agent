@@ -34,6 +34,7 @@ import json
 import os
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -157,12 +158,13 @@ async def run(which: str = "happy") -> None:
     print(task["body"])
 
     server = create_sdk_mcp_server(name=SERVER, tools=CORTEX_TOOLS)
-    source_log: list[str] = [task["body"]]
+    today = f"Today's date: {date.today().isoformat()}"
+    source_log: list[str] = [today, task["body"]]
     pending_calls: dict[str, tuple[str, dict]] = {}
     session_id: str | None = None
     turns_used, cost, revisions = 0, 0.0, 0
     last_draft = ""
-    prompt = f"PM task brief:\n\n{task['body']}"
+    prompt = f"{today}\n\nPM task brief:\n\n{task['body']}"
 
     # Loop spec §2-3: the done test and the stuck counters live in code, outside the model.
     needs_stories = "stories" in task["body"].lower()
@@ -313,7 +315,7 @@ async def run(which: str = "happy") -> None:
                           "or end with ESCALATE: <why>. Listing them in prose does not count.")
                 continue
 
-            banner(f"HITL CHECKPOINT, status update + any proposed stories queued for "
+            banner(f"SUCCESS + HITL CHECKPOINT, status update + any proposed stories queued for "
                    f"your review. Nothing posted, no commitments made. "
                    f"Run cost ≈ ${cost:.4f}")
             finish("success", accepted=True, reason="validator passed and done test met")

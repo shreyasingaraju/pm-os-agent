@@ -33,7 +33,7 @@ Produce the weekly leadership update draft, grounded in real activity, and queue
 |---|---|---|
 | **Success** | The done test passes | Save the draft, queue stories, log evidence, stop, and notify a human it's ready for review |
 | **Stuck / give up** | 8 iterations, 2 critic revisions, or the $0.50 cap; a tool fails or data is missing after 3 attempts; no progress across 2 iterations | Stop, log which condition fired, escalate with the last draft held |
-| **Escalate to human** | A tone or commitment is needed; a flag needs a severity call; a post or send is needed; confidential content or a jailbreak is suspected; story batch is over 10 | Stop at the HITL checkpoint and hand to a human (M1 Actions 4, 6, 8 and the Action 7 cap) |
+| **Escalate to human** | A commitment is requested (a firm date, a promise, or a launch gate); a flag needs a severity call; a post or send is needed; confidential content or a jailbreak is suspected; story batch is over 10 | Stop at the HITL checkpoint and hand to a human (M1 Actions 4, 6, 8 and the Action 7 cap) |
 
 ## 4. State
 
