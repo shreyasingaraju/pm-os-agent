@@ -17,7 +17,11 @@ from prompts import CRITIC_SYSTEM
 
 
 async def review(model: str, proposed_output: str, source_data: str) -> dict:
-    """Return {"verdict": "pass"|"fail", "reasons": [...], "_cost": float}."""
+    """Return {"verdict": "pass"|"fail", "tier": ..., "reasons": [...], "_cost": float}.
+
+    If the critic's reply can't be parsed, it is asked once more (a formatting glitch is
+    not a verdict, so it must not cost the drafter a revision). Both calls' costs count.
+    """
     options = ClaudeAgentOptions(
         model=model,
         system_prompt=CRITIC_SYSTEM,
@@ -27,19 +31,26 @@ async def review(model: str, proposed_output: str, source_data: str) -> dict:
     )
     prompt = (f"SOURCE DATA Cortex used:\n{source_data}\n\n"
               f"CORTEX PROPOSED OUTPUT:\n{proposed_output}")
-    text, cost = "", 0.0
-    async for msg in query(prompt=prompt, options=options):
-        if isinstance(msg, ResultMessage):
-            text = msg.result or ""
-            cost = msg.total_cost_usd or 0.0
-    try:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        verdict = json.loads(match.group(0)) if match else {}
-        if verdict.get("verdict") not in ("pass", "fail"):
-            raise ValueError("bad verdict")
-    except (json.JSONDecodeError, ValueError, AttributeError):
-        verdict = {"verdict": "fail", "reasons": ["critic returned unparseable output"]}
+    total_cost, verdict = 0.0, None
+    for _attempt in range(2):
+        text, cost = "", 0.0
+        async for msg in query(prompt=prompt, options=options):
+            if isinstance(msg, ResultMessage):
+                text = msg.result or ""
+                cost = msg.total_cost_usd or 0.0
+        total_cost += cost
+        try:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            parsed = json.loads(match.group(0)) if match else {}
+            if parsed.get("verdict") not in ("pass", "fail"):
+                raise ValueError("bad verdict")
+            verdict = parsed
+            break
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            continue
+    if verdict is None:
+        verdict = {"verdict": "fail", "reasons": ["critic returned unparseable output twice"]}
     if verdict["verdict"] == "fail" and verdict.get("tier") not in ("fixable", "safety"):
         verdict["tier"] = "fixable"
-    verdict["_cost"] = cost
+    verdict["_cost"] = total_cost
     return verdict

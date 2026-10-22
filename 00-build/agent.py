@@ -326,6 +326,14 @@ async def run(which: str = "happy") -> None:
         evidence["critic_verdicts"].append(shown)
         print(json.dumps(shown, indent=2))
 
+        # The cost cap is hard: the critic call counts toward it too, so check again here.
+        if cost >= COST_CAP_USD:
+            reason = (f"cost cap ${COST_CAP_USD} hit at ${cost:.4f} "
+                      f"(critic verdict: {verdict['verdict']})")
+            banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+            finish("stuck", accepted=False, reason=reason)
+            return
+
         # Tiered fail-action (orchestration map, Field 5): a safety failure is blocked
         # and escalated immediately, with no retry.
         if verdict["verdict"] == "fail" and verdict.get("tier") == "safety":
