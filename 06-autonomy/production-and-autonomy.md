@@ -13,8 +13,10 @@ _Autonomy is a product decision per user, not one global setting._
 | PM who owns the project | Supervised | They own tone, commitments and the status color, which are above the line in M1. Cortex does the work and stops at the checkpoint for the PM to approve every update. |
 | Lead engineer who verifies the technical details | Assisted | Cortex has made small technical slips, such as a wrong day count and a false citation to the norms. The engineer checks and corrects the PR IDs, metrics and claims. Cortex drafts, and the engineer edits. |
 | Executive who reviews the update | Assisted | The executive only ever receives an update the PM has approved. A wrong status in front of leadership has the largest blast radius, and posting stays above the line for everyone. |
+| Product marketing | Assisted | They contribute release dates, and dates are above the line. A date reaches Cortex only through the PM at the checkpoint, never as an input Cortex handles. They see only the shareable slice, never Orbit or Pulsar. |
+| Customer support | Assisted | They read known-issue status to answer customers. Cortex gives an internal summary only, and a human writes anything customer-facing. Cortex never states a date or a promise. |
 
-The dial never moves the M1 agent line: posting an unapproved company-wide update stays human-only for all three segments.
+The dial never moves the M1 agent line: posting an unapproved company-wide update stays human-only for all five segments.
 
 ## Trust Ladder
 
@@ -69,11 +71,11 @@ The dial never moves the M1 agent line: posting an unapproved company-wide updat
 
 ## Widen-autonomy decision rule
 
-The PM segment moves from supervised to bounded-autonomous for **routine updates only** (fresh data of 14 days or less, no confidential item in scope, no commitment requested) when **every line of the eval gate holds for 4 consecutive weeks with at least 20 runs per project and zero Cortex incidents (the six types in the Trust Ladder section), and the PM signs off in writing**; any incident resets the clock and drops the dial one rung. The engineer and executive segments only move after the PM segment has held the new rung for a further 4 weeks.
+The PM segment moves from supervised to bounded-autonomous for **routine updates only** (fresh data of 14 days or less, no confidential item in scope, no commitment requested) when **every line of the eval gate holds for 4 consecutive weeks with at least 20 runs per project and zero Cortex incidents (the six types in the Trust Ladder section), and the PM signs off in writing**; any incident resets the clock and drops the dial one rung. The engineer, executive, product marketing and customer support segments only move after the PM segment has held the new rung for a further 4 weeks.
 
 ## Governance & forward strategy
 
-- **Compliance:** these must never enter a prompt or a stored log: confidential or embargoed items (Orbit, Pulsar) outside the core team, customer or personal data (PII), credentials and API keys, and HR or legal matters. The roadmap filter drops confidential items before they reach Cortex (the target design). Nothing personal is stored in memory, and evidence logs are retained for 1 year with restricted read access.
+- **Compliance:** these must never enter a prompt or a stored log: confidential or embargoed items (Orbit, Pulsar) outside the core team, customer or personal data (PII), credentials and API keys, and HR or legal matters. The roadmap filter drops confidential items before they reach Cortex (the target design). Nothing personal is stored in memory, and evidence logs are retained for 1 year with restricted read access. Product marketing sees only the shareable slice, customer support receives internal summaries only, and no customer-facing text, release date or promise comes from Cortex.
 - **Safety:** these stay above the line for everyone: posting or sending, committing a date or marking a launch gate, deciding the status color, and closing or merging tickets. The kill switch is the `.cortex-kill` file.
 - **Reliability:** the caps are 14 iterations, 3 revisions, 360 seconds, $0.50 per run and $5 per day. A stuck run escalates to a human. If the model is down, Cortex fails closed: the run stops with no draft and no retry loop, and the PM writes that update by hand.
 - **Strategy:** the next capability is **live Jira and GitHub read connectors** in place of fixtures. The gate is the same eval suite, plus new cases for real API failures (a 500 means one retry and then escalate) and a data-freshness case, after 4 weeks in shadow mode. After that, the next segment is projects with open Sev-1s or launch holds, such as Vega.
