@@ -6,14 +6,14 @@
 
 ## What it does
 
-_One paragraph: the agent in action, end to end._
+Cortex is a PM chief-of-staff agent. Each weekday, a scheduled run (with a hook for new items) pulls a project's status, engineering activity, past updates, norms and roadmap, and drafts the weekly leadership update for human approval. It leaves the status color and any date commitment to the PM, flags stale data, and queues proposed sprint stories for approval. An independent critic checks every draft against five rules before it reaches the human checkpoint. Nothing is ever posted or committed by Cortex.
 
 ## How you built it
 
-- **Coding agent:** _which one you directed (Claude Code / Cursor / Codex)_
-- **Model + bounds:** _model used, max iterations, cost cap, queue cap_
-- **Repo / config:** _path to your build in `00-build/`_
-- **Live link:** _[shareable URL, optional bonus]_
+- **Coding agent:** Claude Code.
+- **Model + bounds:** `claude-haiku-4-5`. 14 iterations, 3 critic revisions, a 360-second timeout, $0.50 per run, $5 per day, 10 stories per run, plus a kill switch.
+- **Repo / config:** `00-build/` in the repo (`agent.py`, `prompts.py`, `critic.py`, `tools.py`, `evals/run_evals.py`).
+- **Live link:** none.
 
 ## Screenshots (required, collected M2 to M6)
 
@@ -26,7 +26,7 @@ Real screenshots of *your* Cortex running. These are the `00-build/CORTEX-ANATOM
 | 3 | [grounded](screenshots/m4-grounded-run-trace.txt) · [withheld source](screenshots/m4-withheld-source-trace.txt) | a grounded update citing pulled activity + a caught hallucination | M4 |
 | 4 | [jailbreak](screenshots/m5-jailbreak-trace.txt) | jailbreak refused + escalated | M5 |
 | 5 | [bound trip](screenshots/m5-bound-trip-trace.txt) | an iteration/cost/queue bound halting a runaway | M5 |
-| 6 | _[img]_ | end-to-end run | M6 |
+| 6 | [end-to-end](screenshots/m6-end-to-end-trace.txt) | end-to-end run | M6 |
 
 ### Screenshot 1 (M2): happy-path run
 
@@ -149,6 +149,30 @@ Saved evidence log -> run-output/evidence-happy.json  (exit: stuck)
 
 **Reflection (M5).** In the jailbreak run, the human sees a short escalation that flags the injection and asks for a clean re-submission. In the bound-trip run, the human sees a halt banner, a held draft and a story waiting in the approval queue. What didn't happen: nothing was posted, no gate was marked, no date was committed, no confidential roadmap content was shared, and the run didn't loop or run up a bill. The bound I'd tune next is the one that stops Cortex from naming Orbit even when it quotes an attack. After that, I'd make a bound-trip stop report its true cost instead of $0.00.
 
+### Screenshot 6 (M6): the end-to-end run
+
+Full terminal trace (pasted transcript) of the happy path on the finished build. [Full trace](screenshots/m6-end-to-end-trace.txt)
+
+```
+[turn 1] TOOL get_project / get_activity / search_past_updates / get_norms / get_roadmap
+[turn 1] TOOL propose_stories({... 1 story ...})  -> queued_for_approval
+DONE: Draft: Northstar (P-NORTH) leadership status, data through 2026-07-03 ...
+  Status: [PENDING HUMAN DECISION: ... data is 112 days old ...]
+  Checked, found clear: No Sev-1s, no launch-hold flags, no confidential items in scope
+CRITIC: "verdict": "pass"
+SUCCESS + HITL CHECKPOINT ... Run cost ≈ $0.1784   (exit: success)
+```
+
+*Caption: the finished build end to end. Cortex pulls five sources, queues one story for approval, and drafts the update with the status left to a human and the 112-day-old data flagged. It lists what it checked and found clear, the critic passes it, and the run stops at the human checkpoint under the cost cap (about $0.18, exit `success`). The critic's pass came with no reasons listed, which fits a retry after an unparseable first reply.*
+
 ## How to run it
 
-_Minimal steps for someone to reproduce the demo (env vars, and the command or the coding-agent prompt you used)._
+```bash
+cd 00-build
+python agent.py                # happy path: the weekly update + proposed stories
+python agent.py missing-data   # the project is missing: Cortex escalates
+python agent.py jailbreak      # the injection is refused and escalated
+python evals/run_evals.py      # grade the saved runs against the six eval cases
+```
+
+Settings (model and bounds) are in `00-build/.env`. Copy `.env.example` to `.env` first. Cortex uses your Claude Code login unless `ANTHROPIC_API_KEY` is set.

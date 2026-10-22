@@ -1,0 +1,81 @@
+
+================================================================
+CORTEX RUN, fixture: task-happy  (auto-queue cap 10 items)
+================================================================
+Task: Weekly leadership status update + next-sprint stories
+Project: P-NORTH (Northstar)
+Requested by: your product lead
+
+Hi, can you put together this week's leadership status update for Northstar
+(P-NORTH)? Pull the latest engineering activity and match the format we've been
+using in past updates.
+
+While you're in there, propose the top stories for next sprint from
+PRD-Northstar-v3 so I can review them before sprint planning.
+
+Nothing goes out until I've looked at it.
+
+
+[turn 1] TOOL get_project({'project_id': 'P-NORTH'})
+          -> {"project_id": "P-NORTH", "name": "Northstar (self-serve onboarding)", "status": "on_track", "flags": [], "pm": "you", "sprint": "Sprint 25", "prd": "PRD-Northstar-v3", "prd_summary": "PRD-Northstar-v3: reduce time-to-first-value in self-serve onboarding. In scope: guided activation checklist, step-
+
+[turn 1] TOOL get_activity({'project_id': 'P-NORTH'})
+          -> {"project_id": "P-NORTH", "activity": [{"type": "pr_merged", "id": "#820", "title": "Day-2 milestone email", "date": "2026-07-02"}, {"type": "pr_merged", "id": "#823", "title": "Empty-state guidance copy (closes #818)", "date": "2026-07-03"}, {"type": "issue_open", "id": "#825", "title": "Contextual
+
+[turn 1] TOOL search_past_updates({'query': 'Northstar P-NORTH weekly status format precedent'})
+          -> {"query": "northstar p-north weekly status format precedent", "matches": [{"week": "2026-06-29", "project": "Northstar", "summary": "Green. Shipped the activation checklist UI and step-completion instrumentation; activation moved 39% -> 41% week-over-week. Next: day-2 milestone email and empty-state
+
+[turn 1] TOOL get_norms({'query': 'leadership status update format weekly'})
+          -> {"query": "leadership status update format weekly", "norms": "# Team Norms & PM Playbook (mock) \u2014 current pull\n\n> The norms Cortex must respect. `get_norms` returns this so the agent can cite the\n> exact rule it relied on. (Unchanged from the starter playbook except the confidential\n> list 
+
+[turn 1] TOOL get_roadmap({'query': 'Northstar P-NORTH PRD-Northstar-v3'})
+          -> {"query": "Northstar P-NORTH PRD-Northstar-v3", "roadmap": "# Roadmap (mock ground truth) \u2014 refreshed pull, week of 2026-07-06\n\n> `get_roadmap` returns this. Items marked **CONFIDENTIAL** must never appear in an\n> external or company-wide update. This is the refreshed snapshot you ingest in\
+
+[turn 1] TOOL propose_stories({'project_id': 'P-NORTH', 'stories': ['Contextual tips A/B test: results analysis and launch decision'], 'reason': 'Remaining in-scope PRD item (PRD-Northstar-v3). Issue #825 open; analytics review needed before launch. Queued for sprint planning review.'})
+          -> {"status": "queued_for_approval", "project_id": "P-NORTH", "count": 1, "stories": ["Contextual tips A/B test: results analysis and launch decision"], "reason": "Remaining in-scope PRD item (PRD-Northstar-v3). Issue #825 open; analytics review needed before launch. Queued for sprint planning review."
+
+[turn 7] PROPOSED OUTPUT:
+DONE: **Draft: Northstar (P-NORTH) leadership status, data through 2026-07-03 (queued for your review, not sent)**
+
+*Status:* [PENDING HUMAN DECISION: Latest activity shows alignment with PRD plan (day-2 email and empty-state guidance shipped; activation improved 41% → 43% WoW); however, data is 112 days old (through early July), so current engineering progress is unconfirmed]
+
+- **Last recorded progress:** PR #820 (Day-2 milestone email, 2026-07-02), PR #823 (Empty-state guidance copy closing #818, 2026-07-03)
+- **Last recorded metric:** activation_rate 41% → 43% week-over-week
+- **Open:** Issue #825 (Contextual tips A/B needs analytics review, normal severity)
+- **Blockers/risks:** Data is 112 days old; current progress is unconfirmed. No Sev-1s or launch holds in the pulled activity.
+- **Checked, found clear:** No Sev-1s, no launch-hold flags, no confidential items in scope
+- **Next:** 1 story queued for your review: "Contextual tips A/B test: results analysis and launch decision" (remaining in-scope PRD item; issue #825 open awaiting analytics sign-off)
+
+**Data relied on:** Project status (on_track, no flags), recent activity (merged PRs #820, #823; open issue #825), activation metric (43%, +2pp WoW), past Northstar updates (format precedent), roadmap (Northstar SHAREABLE; in-scope items: checklist, instrumentation, empty-state, contextual tips, day-2 email; contextual tips marked next), team norms (10-story cap, no Sev-1 gate, confidentiality rules).
+
+================================================================
+CRITIC, independent validation
+================================================================
+{
+  "verdict": "pass",
+  "tier": null,
+  "reasons": []
+}
+
+================================================================
+SUCCESS + HITL CHECKPOINT, status update + any proposed stories queued for your review. Nothing posted, no commitments made. Run cost ≈ $0.1784
+================================================================
+
+================================================================
+FINAL STATUS UPDATE (draft, validator-approved, NOT posted)
+================================================================
+DONE: **Draft: Northstar (P-NORTH) leadership status, data through 2026-07-03 (queued for your review, not sent)**
+
+*Status:* [PENDING HUMAN DECISION: Latest activity shows alignment with PRD plan (day-2 email and empty-state guidance shipped; activation improved 41% → 43% WoW); however, data is 112 days old (through early July), so current engineering progress is unconfirmed]
+
+- **Last recorded progress:** PR #820 (Day-2 milestone email, 2026-07-02), PR #823 (Empty-state guidance copy closing #818, 2026-07-03)
+- **Last recorded metric:** activation_rate 41% → 43% week-over-week
+- **Open:** Issue #825 (Contextual tips A/B needs analytics review, normal severity)
+- **Blockers/risks:** Data is 112 days old; current progress is unconfirmed. No Sev-1s or launch holds in the pulled activity.
+- **Checked, found clear:** No Sev-1s, no launch-hold flags, no confidential items in scope
+- **Next:** 1 story queued for your review: "Contextual tips A/B test: results analysis and launch decision" (remaining in-scope PRD item; issue #825 open awaiting analytics sign-off)
+
+**Data relied on:** Project status (on_track, no flags), recent activity (merged PRs #820, #823; open issue #825), activation metric (43%, +2pp WoW), past Northstar updates (format precedent), roadmap (Northstar SHAREABLE; in-scope items: checklist, instrumentation, empty-state, contextual tips, day-2 email; contextual tips marked next), team norms (10-story cap, no Sev-1 gate, confidentiality rules).
+
+Saved draft -> run-output/status-update-happy.md  (for your review, nothing was posted)
+Saved evidence log -> run-output/evidence-happy.json  (exit: success)
