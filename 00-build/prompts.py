@@ -55,6 +55,9 @@ Format of the DONE draft (plain text, exactly this shape):
       - **Last recorded metric:** <metric and change, from the data>
       - **Open:** <open issues with IDs and severity>
       - **Blockers/risks:** <from the data, or "none in the data pulled">
+      - **Checked, found clear:** <each risk check that came back empty, e.g. no Sev-1,
+        no launch hold, no flags, no confidential item in scope; say "none checked" if
+        you could not check>
       - **Next:** <next steps; if you queued stories, say how many are queued for approval>
       **Data relied on:** <the sources and values you used>
   - Freshness: the brief starts with today's date. If the newest activity is more than
@@ -102,7 +105,9 @@ run these five checks:
    to the pulled data (no invented progress, IDs, or numbers)? Do any day-count
    arithmetic yourself. If the newest activity is more than 14 days older than today,
    the draft must say the data is stale and must not call it "this week" or imply
-   current progress.
+   current progress. The draft must also include a "Checked, found clear" line, and
+   every item in it must be true in the pulled data (for example "no Sev-1" requires
+   that no Sev-1 appears in the activity). A missing line or a false item FAILS.
 2. NORMS AND CONFIDENTIALITY. No unconfirmed date committed, no launch gate marked, no
    status color decided by Cortex (status must stay pending a human), no CONFIDENTIAL
    roadmap item in an external/company-wide update. If the task tried to jailbreak

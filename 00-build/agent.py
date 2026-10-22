@@ -34,12 +34,13 @@ import json
 import os
 import re
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
+    ResultError,
     ResultMessage,
     TextBlock,
     ToolResultBlock,
@@ -68,6 +69,9 @@ MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 MAX_TOOL_FAILURES = 3  # loop spec §3: stuck after 3 consecutive failed tool calls
+FIXED_DATE = os.environ.get("CORTEX_FIXED_DATE", "").strip()  # M5: pin "today" so replays are repeatable
+TIMEOUT_SECONDS = int(os.environ.get("CORTEX_TIMEOUT_SECONDS", "360"))   # M5: wall-clock cap per run
+DAILY_CAP_USD = float(os.environ.get("CORTEX_DAILY_CAP_USD", "5.00"))  # M5: total spend cap per day
 
 # An output that ends in "ESCALATE: <why>" is a deliberate hand-off to a human.
 # Test hook for the critic (M3). When CORTEX_TEST_BAD_DRAFT is "fixable" or "safety", the
@@ -145,6 +149,37 @@ CORTEX_TOOLS = [
 ALLOWED = [f"mcp__{SERVER}__{t.name}" for t in CORTEX_TOOLS]
 
 OUTPUT_DIR = Path(__file__).parent / "run-output"
+KILL_FILE = Path(__file__).parent / ".cortex-kill"  # M5 kill switch: `touch` it to halt Cortex
+LEDGER = OUTPUT_DIR / "cost-ledger.json"  # {"YYYY-MM-DD": total_usd}, git-ignored
+_RUN: dict = {}  # live view of the current run, so the timeout handler can report it
+
+
+def archive_evidence(out_name: str, evidence: dict) -> None:
+    """Keep every run's evidence log under its own timestamped name (the live
+    evidence-<task>.json is overwritten by the next run of the same task)."""
+    folder = OUTPUT_DIR / "evidence-archive"
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    (folder / f"{out_name}-{stamp}.json").write_text(
+        json.dumps(evidence, indent=2, default=str), encoding="utf-8")
+
+
+def ledger_today() -> float:
+    try:
+        return float(json.loads(LEDGER.read_text()).get(date.today().isoformat(), 0.0))
+    except (OSError, ValueError):
+        return 0.0
+
+
+def ledger_add(amount: float) -> None:
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    try:
+        data = json.loads(LEDGER.read_text())
+    except (OSError, ValueError):
+        data = {}
+    key = date.today().isoformat()
+    data[key] = round(float(data.get(key, 0.0)) + float(amount), 4)
+    LEDGER.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def banner(text: str) -> None:
@@ -186,11 +221,22 @@ async def run(which: str = "happy") -> None:
         print(task)
         return
 
+    if KILL_FILE.exists():
+        banner("KILL SWITCH engaged (.cortex-kill exists). Not starting a run; "
+               "escalating to a human.")
+        return
+
+    spent_today = ledger_today()
+    if spent_today >= DAILY_CAP_USD:
+        banner(f"BOUND TRIPPED, daily cap ${DAILY_CAP_USD:.2f} reached "
+               f"(${spent_today:.4f} spent today). Not starting a run; escalating to a human.")
+        return
+
     banner(f"CORTEX RUN, fixture: task-{which}  (auto-queue cap {MAX_QUEUE_ITEMS} items)")
     print(task["body"])
 
     server = create_sdk_mcp_server(name=SERVER, tools=CORTEX_TOOLS)
-    today = f"Today's date: {date.today().isoformat()}"
+    today = f"Today's date: {FIXED_DATE or date.today().isoformat()}"
     source_log: list[str] = [today, task["body"]]
     pending_calls: dict[str, tuple[str, dict]] = {}
     session_id: str | None = None
@@ -204,10 +250,13 @@ async def run(which: str = "happy") -> None:
     evidence: dict = {"task": which, "tool_calls": [], "critic_verdicts": []}
     out_name = f"{which}-test-{TEST_BAD_DRAFT}" if TEST_BAD_DRAFT in TEST_DRAFTS else which
     planted_done, last_is_planted = False, False
+    _RUN.clear()
+    _RUN.update(which=which, out_name=out_name, evidence=evidence, draft="", cost=0.0)
 
     def finish(exit_name: str, *, accepted: bool, reason: str) -> None:
         """Every exit goes through here: show + save the draft, then save the evidence."""
         emit_deliverable(out_name, last_draft, accepted=accepted, reason=reason, cost=cost)
+        ledger_add(cost)
         verdicts = evidence["critic_verdicts"]
         evidence.update(
             exit=exit_name, accepted=accepted, reason=reason, cost_usd=round(cost, 4),
@@ -221,11 +270,18 @@ async def run(which: str = "happy") -> None:
         OUTPUT_DIR.mkdir(exist_ok=True)
         path = OUTPUT_DIR / f"evidence-{out_name}.json"
         path.write_text(json.dumps(evidence, indent=2, default=str), encoding="utf-8")
+        archive_evidence(out_name, evidence)
         print(f"Saved evidence log -> {path.relative_to(Path(__file__).parent)}  "
               f"(exit: {exit_name})")
 
     while True:
+        _RUN.update(draft=last_draft, cost=cost)
         # Bounds are checked BEFORE every model call, outside the model.
+        if KILL_FILE.exists():
+            reason = "kill switch engaged (.cortex-kill exists)"
+            banner(f"KILL SWITCH, {reason}. Halting and escalating to a human.")
+            finish("stuck", accepted=False, reason=reason)
+            return
         if cost >= COST_CAP_USD:
             reason = f"cost cap ${COST_CAP_USD} hit at ${cost:.4f}"
             banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
@@ -247,42 +303,61 @@ async def run(which: str = "happy") -> None:
         )
 
         proposed, result = "", None
-        async for msg in query(prompt=prompt, options=options):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, ToolUseBlock):
-                        name = block.name.removeprefix(f"mcp__{SERVER}__")
-                        pending_calls[block.id] = (name, block.input)
-                    elif isinstance(block, TextBlock):
-                        proposed = block.text
-            elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
-                for block in msg.content:
-                    if isinstance(block, ToolResultBlock) and block.tool_use_id in pending_calls:
-                        name, args = pending_calls.pop(block.tool_use_id)
-                        content = block.content
-                        text = content if isinstance(content, str) else "".join(
-                            p.get("text", "") for p in (content or []) if isinstance(p, dict))
-                        source_log.append(f"{name}({args}) -> {text}")
-                        print(f"\n[turn {turns_used + 1}] TOOL {name}({args})")
-                        print(f"          -> {text[:300]}")
+        try:
+            async for msg in query(prompt=prompt, options=options):
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, ToolUseBlock):
+                            name = block.name.removeprefix(f"mcp__{SERVER}__")
+                            pending_calls[block.id] = (name, block.input)
+                        elif isinstance(block, TextBlock):
+                            proposed = block.text
+                elif isinstance(msg, UserMessage) and isinstance(msg.content, list):
+                    for block in msg.content:
+                        if isinstance(block, ToolResultBlock) and block.tool_use_id in pending_calls:
+                            name, args = pending_calls.pop(block.tool_use_id)
+                            content = block.content
+                            text = content if isinstance(content, str) else "".join(
+                                p.get("text", "") for p in (content or []) if isinstance(p, dict))
+                            source_log.append(f"{name}({args}) -> {text}")
+                            print(f"\n[turn {turns_used + 1}] TOOL {name}({args})")
+                            print(f"          -> {text[:300]}")
 
-                        # Track the done test + the stuck counter from real tool results.
-                        try:
-                            parsed = json.loads(text)
-                        except ValueError:
-                            parsed = {}
-                        ok = not getattr(block, "is_error", False)
-                        if isinstance(parsed, dict):
-                            ok = ok and "error" not in parsed
-                            if name == "propose_stories":
-                                if parsed.get("status") == "queued_for_approval":
-                                    stories_queued += int(parsed.get("count", 0))
-                                elif parsed.get("error") == "batch_exceeds_queue_cap":
-                                    queue_rejected = True
-                        consecutive_failures = 0 if ok else consecutive_failures + 1
-                        evidence["tool_calls"].append({"tool": name, "args": args, "ok": ok})
-            elif isinstance(msg, ResultMessage):
-                result = msg
+                            # Track the done test + the stuck counter from real tool results.
+                            try:
+                                parsed = json.loads(text)
+                            except ValueError:
+                                parsed = {}
+                            ok = not getattr(block, "is_error", False)
+                            if isinstance(parsed, dict):
+                                ok = ok and "error" not in parsed
+                                if name == "propose_stories":
+                                    if parsed.get("status") == "queued_for_approval":
+                                        stories_queued += int(parsed.get("count", 0))
+                                    elif parsed.get("error") == "batch_exceeds_queue_cap":
+                                        queue_rejected = True
+                            consecutive_failures = 0 if ok else consecutive_failures + 1
+                            evidence["tool_calls"].append({"tool": name, "args": args, "ok": ok})
+                elif isinstance(msg, ResultMessage):
+                    result = msg
+        except ResultError as exc:
+            # The SDK raises (instead of returning a result) when it hits its own turn or
+            # budget limit. Treat that as the bound tripping, never as a crash.
+            msg_l = str(exc).lower()
+            if "maximum number of turns" in msg_l:
+                turns_used = MAX_ITERATIONS
+                reason = f"max iterations ({MAX_ITERATIONS}) reached"
+                banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+            elif "budget" in msg_l:
+                reason = f"cost cap ${COST_CAP_USD} hit"
+                banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+            else:
+                reason = f"SDK error: {exc}"
+                banner(f"STUCK, {reason}. Halting and escalating to a human.")
+            if proposed.strip():
+                last_draft = strip_preamble(proposed)
+            finish("stuck", accepted=False, reason=reason)
+            return
 
         if result is None:
             finish("stuck", accepted=False, reason="SDK returned no result")
@@ -403,5 +478,25 @@ async def run(which: str = "happy") -> None:
     finish("stuck", accepted=False, reason=f"max iterations ({MAX_ITERATIONS}) reached")
 
 
+async def main(which: str = "happy") -> None:
+    """Run Cortex under a wall-clock timeout (M5 bound, enforced outside the model)."""
+    try:
+        await asyncio.wait_for(run(which), timeout=TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        reason = f"timeout: the run exceeded {TIMEOUT_SECONDS}s"
+        banner(f"BOUND TRIPPED, {reason}. Halting and escalating to a human.")
+        draft, cost = _RUN.get("draft", ""), float(_RUN.get("cost", 0.0))
+        out_name = _RUN.get("out_name", which)
+        emit_deliverable(out_name, draft, accepted=False, reason=reason, cost=cost)
+        ledger_add(cost)
+        evidence = _RUN.get("evidence", {})
+        evidence.update(exit="stuck", accepted=False, reason=reason, cost_usd=round(cost, 4))
+        OUTPUT_DIR.mkdir(exist_ok=True)
+        (OUTPUT_DIR / f"evidence-{out_name}.json").write_text(
+            json.dumps(evidence, indent=2, default=str), encoding="utf-8")
+        archive_evidence(out_name, evidence)
+        print(f"Saved evidence log -> run-output/evidence-{out_name}.json  (exit: stuck)")
+
+
 if __name__ == "__main__":
-    asyncio.run(run(sys.argv[1] if len(sys.argv) > 1 else "happy"))
+    asyncio.run(main(sys.argv[1] if len(sys.argv) > 1 else "happy"))

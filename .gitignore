@@ -22,3 +22,4 @@ __pycache__/
 /runs/
 # Cortex draft output (status updates it drafts locally, never posted)
 00-build/run-output/
+00-build/.cortex-kill
