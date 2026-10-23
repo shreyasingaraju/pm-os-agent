@@ -6,6 +6,8 @@ _Shreya Singaraju · Agentic Loops for PMs Cohort · October 2026_
 
 Repo: https://github.com/shreyasingaraju/pm-os-agent
 
+Presentation: https://shreyasingaraju.github.io/pm-os-agent/06-autonomy/pitch.html
+
 This repo is my final project for the Agentic Loops for PMs Certification, **Cortex**. Each module’s artifact lives in its own folder; this README is the dashboard and the pitch.
 
 ---
@@ -31,6 +33,24 @@ This repo is my final project for the Agentic Loops for PMs Certification, **Cor
 - **Production & autonomy plan**: [`06-autonomy/production-and-autonomy.md`](06-autonomy/production-and-autonomy.md)
 - **Prototype write-up**: [`06-autonomy/prototype.md`](06-autonomy/prototype.md)
 - **Build insights**: [`06-autonomy/build-insights.md`](06-autonomy/build-insights.md)
+
+---
+
+## How to run Cortex
+
+The working build is in [`00-build/`](00-build/). Full steps and the run screenshots are in [`06-autonomy/prototype.md`](06-autonomy/prototype.md).
+
+```bash
+cd 00-build
+pip install -r requirements.txt
+cp .env.example .env           # model and bounds; uses your Claude Code login unless ANTHROPIC_API_KEY is set
+python agent.py                # happy path: the weekly update + proposed stories
+python agent.py missing-data   # the project is missing: Cortex escalates
+python agent.py jailbreak      # the injection is refused and escalated
+python evals/run_evals.py      # grade the saved runs against the six eval cases
+```
+
+Each run costs about $0.05 to $0.20 on the default model, and every run is bounded by the caps in [`05-bounds-evals/bounds-and-evals.md`](05-bounds-evals/bounds-and-evals.md).
 
 ---
 
